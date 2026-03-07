@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Pedidos Lojas - Atualizado</title>
+<link rel="manifest" href="manifest.json">
+<style>
+body{font-family:Arial,Helvetica,sans-serif;margin:0;background:#f4f6f8;color:#1b1f24}
+header{background:#173a63;color:#fff;padding:14px 16px;position:sticky;top:0;z-index:5}
+header .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.container{max-width:1200px;margin:0 auto;padding:14px}
+.card{background:#fff;border-radius:14px;padding:14px;box-shadow:0 2px 8px rgba(0,0,0,.08);margin-bottom:14px}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.tabs button{border:0;background:#dfe8f5;color:#173a63;padding:10px 12px;border-radius:10px;cursor:pointer}
+.tabs button.active{background:#173a63;color:#fff}
+.tab{display:none}.tab.active{display:block}
+.two{display:grid;grid-template-columns:1fr;gap:14px}@media(min-width:980px){.two{grid-template-columns:1.15fr .85fr}}
+input,select,textarea{width:100%;padding:10px;border:1px solid #d7dee6;border-radius:10px;box-sizing:border-box}
+button{border:0;background:#2d7ff9;color:#fff;padding:10px 12px;border-radius:10px;cursor:pointer}
+button.alt{background:#16a085} button.warn{background:#d35400} button.danger{background:#c0392b} button.light{background:#eef3f8;color:#173a63}
+.small{font-size:12px;color:#667}
+table{width:100%;border-collapse:collapse;margin-top:8px}th,td{border-bottom:1px solid #eef1f4;padding:8px;text-align:left;font-size:14px;vertical-align:top}
+.badge{display:inline-block;padding:4px 8px;border-radius:999px;background:#eef3f8;color:#173a63;font-size:12px}
+.row{display:flex;gap:10px;flex-wrap:wrap}.row>*{flex:1;min-width:140px}
+.notice{padding:10px;border-radius:10px;background:#eef8ff;color:#17406a;white-space:pre-wrap}.error{background:#fff1f0;color:#8a1f11}.ok{background:#eefbf3;color:#135c32}.warnbox{background:#fff8e8;color:#7a5200}
+.table-wrap{overflow:auto}
+.pagination{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}
+.pagination .controls{display:flex;gap:6px;flex-wrap:wrap}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:end}
+.summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
+.summary-box{padding:10px;border-radius:10px;background:#f7fafc;border:1px solid #e5edf5}
+.hide-print{display:inline-block}
+ .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);padding:18px;z-index:20;overflow:auto}
+.modal-card{max-width:1100px;margin:20px auto;background:#fff;border-radius:16px;padding:16px;box-shadow:0 8px 30px rgba(0,0,0,.18)}
+.modal-head{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.order-link{display:inline-flex;align-items:center;gap:8px;font-weight:700}
+.order-link .icon{font-size:16px}
+@media print{
+  header,.tabs,#msg,.hide-print,#loginModal,#orderModal,#shortageModal,#admin,.no-print{display:none !important}
+  body{background:#fff}
+  .card{box-shadow:none;border:1px solid #ddd}
+  .tab{display:block !important}
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="row">
+    <strong style="font-size:18px">Pedidos Lojas</strong>
+    <span class="badge" id="who">offline</span>
+    <span class="badge" id="storeBadge">Loja 01</span>
+    <button class="light" onclick="openLogin()">Entrar</button>
+    <button class="light" onclick="logout()">Sair</button>
+    <button class="light" onclick="syncAll()">Sincronizar</button>
+  </div>
+</header>
+<div class="container">
+  <div class="tabs no-print">
+    <button class="active" data-tab="estoque" onclick="showTab('estoque', this)">Buscar estoque</button>
+    <button data-tab="pedido" onclick="showTab('pedido', this)">Pedido de loja</button>
+    <button data-tab="ordem" onclick="showTab('ordem', this)">Ordem de pedidos feita</button>
+    <button data-tab="separacao" onclick="showTab('separacao', this)">Faltas de separação</button>
+    <button data-tab="admin" onclick="showTab('admin', this)">Admin / Importação</button>
+  </div>
+
+  <div id="msg"></div>
+
+  <section id="estoque" class="tab active">
+    <div class="two">
+      <div class="card">
+        <div class="row">
+          <div><input id="searchStock" placeholder="Buscar por código, produto, material ou origem" oninput="renderProducts()"></div>
+          <div style="max-width:120px">
+            <label class="small">Exibir</label>
+            <select id="stockPageSize" onchange="setPageSize('stock', this.value)">
+              <option value="10">10</option>
+              <option value="20">20</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+          </div>
+          <div style="align-self:end"><button class="light" onclick="syncProducts()">Atualizar lista</button></div>
+        </div>
+        <div class="table-wrap">
+          <table id="tblProducts">
+            <thead><tr><th>Código</th><th>Produto</th><th>Material</th><th>Estoque</th><th>Fator</th><th>Origem</th><th>Ação</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div id="stockPager" class="pagination"></div>
+      </div>
+
+      <div class="card">
+        <h3 style="margin-top:0">Editar produto</h3>
+        <div class="small">Ao alterar o fator de conversão, os produtos com os mesmos 3 primeiros dígitos receberão o mesmo fator automaticamente.</div>
+        <div class="row" style="margin-top:10px">
+          <div><label>Código</label><input id="editCode" readonly></div>
+          <div><label>Origem</label><input id="editSource" readonly></div>
+        </div>
+        <div class="row">
+          <div><label>Produto</label><input id="editName"></div>
+          <div><label>Material</label><input id="editMaterial"></div>
+        </div>
+        <div class="row">
+          <div><label>Quantidade em estoque</label><input id="editStock" type="number" step="0.01"></div>
+          <div><label>Fator de conversão</label><input id="editFactor" type="number" step="1" min="1"></div>
+        </div>
+        <div id="factorPrefixInfo" class="notice" style="margin-top:10px">Selecione um produto para ver quais códigos compartilharão o mesmo fator.</div>
+        <div class="row" style="margin-top:10px">
+          <div><button class="alt" onclick="saveStockEdit()">Salvar alteração</button></div>
+          <div><button class="light" onclick="useInOrder()">Usar no pedido</button></div>
+        </div>
+        <div id="editMsg" class="notice" style="margin-top:10px">Selecione um produto na lista para editar.</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="pedido" class="tab">
+    <div class="two">
+      <div class="card">
+        <h3 style="margin-top:0">Selecionar produto pelo estoque</h3>
+        <div class="row">
+          <div><input id="searchOrder" placeholder="Buscar produto para pedido" oninput="renderOrderCatalog()"></div>
+          <div style="max-width:120px">
+            <label class="small">Exibir</label>
+            <select id="orderPageSize" onchange="setPageSize('order', this.value)">
+              <option value="10">10</option>
+              <option value="20">20</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table id="tblOrderCatalog">
+            <thead><tr><th>Código</th><th>Produto</th><th>Estoque</th><th>Fator</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div id="orderPager" class="pagination"></div>
+      </div>
+
+      <div class="card">
+        <h3 style="margin-top:0">Adicionar ao pedido</h3>
+        <div class="row">
+          <div><label>Código</label><input id="orderCode" readonly></div>
+          <div><label>Produto</label><input id="orderProduct" readonly></div>
+        </div>
+        <div class="row">
+          <div><label>Fator de conversão</label><input id="orderFactor" readonly></div>
+          <div><label>Estoque atual</label><input id="orderStock" readonly></div>
+        </div>
+        <div class="row">
+          <div><label>Caixas solicitadas</label><input id="orderBoxes" type="number" min="0" step="1" oninput="calcFromBoxes()"></div>
+          <div><label>Unidades solicitadas</label><input id="orderUnits" type="number" min="0" step="1" oninput="calcFromUnits()"></div>
+        </div>
+        <div id="orderCalc" class="notice">Selecione um produto. O fator atualizado aparecerá automaticamente.</div>
+        <div class="row" style="margin-top:10px">
+          <div><button class="alt" onclick="addOrderItem()">Adicionar ao pedido</button></div>
+          <div><button class="light" onclick="saveOrderDraft()">Salvar pedido</button></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="toolbar">
+        <h3 style="margin:0;flex:1">Pré-visualização do pedido em montagem</h3>
+        <button class="alt" onclick="saveOrderDraft()">Salvar pedido</button>
+        <button class="light" onclick="clearDraftOrder()">Limpar montagem</button>
+      </div>
+      <div id="draftSummary" class="summary-grid" style="margin-top:10px"></div>
+      <div class="table-wrap">
+        <table id="tblDraftOrder">
+          <thead><tr><th>Código</th><th>Produto</th><th>Caixas</th><th>Unidades</th><th>Estoque</th><th>Status</th><th>Ação</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section id="ordem" class="tab">
+    <div class="card">
+      <div class="row no-print">
+        <div><label>Loja</label><select id="storeSelect" onchange="changeStore(this.value)"></select></div>
+        <div style="align-self:end"><button class="light" onclick="editCurrentOrder()">Editar montagem</button></div>
+        <div style="align-self:end"><button class="light" onclick="downloadPdf()">Baixar PDF</button></div>
+        <div style="align-self:end"><button class="light" onclick="downloadWord()">Baixar Word</button></div>
+        <div style="align-self:end"><button class="light" onclick="downloadExcel()">Baixar Excel</button></div>
+        <div style="align-self:end"><button class="alt" onclick="printOrder()">Imprimir lista</button></div>
+      </div>
+      <div class="notice" id="selectedOrderInfo">Nenhuma ordem selecionada.</div>
+      <div class="table-wrap" style="margin-top:10px"><table id="tblOrdersList"><thead><tr><th>Ordem</th><th>Data</th><th>Itens</th><th>Unidades</th><th>Ações</th></tr></thead><tbody></tbody></table></div>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">Itens da ordem selecionada</h3>
+      <div class="table-wrap"><table id="tblOrder"><thead><tr><th>Código</th><th>Produto</th><th>Caixas</th><th>Unidades</th><th>Estoque</th><th>Status</th><th>Ação</th></tr></thead><tbody></tbody></table></div>
+    </div>
+  </section>
+
+  <section id="separacao" class="tab">
+    <div class="card">
+      <div class="small">Selecione uma ordem salva e informe quanto permaneceu no estoque.</div>
+      <div class="notice" id="selectedShortageInfo">Nenhuma ordem selecionada para faltas.</div>
+      <div class="table-wrap" style="margin-top:10px"><table id="tblShortageOrders"><thead><tr><th>Ordem</th><th>Data</th><th>Itens</th><th>Marcados com falta</th><th>Ações</th></tr></thead><tbody></tbody></table></div>
+    </div>
+    <div class="card">
+      <div class="table-wrap"><table id="tblShortages"><thead><tr><th>Código</th><th>Produto</th><th>Pedido</th><th>Permaneceu no estoque</th><th>Enviado</th></tr></thead><tbody></tbody></table></div>
+      <div class="row" style="margin-top:10px">
+        <div><button class="warn" onclick="saveShortages()">Salvar faltas</button></div>
+        <div><button class="alt" onclick="applySeparation()">Aplicar baixa no estoque</button></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">Lista de faltas que permaneceram no estoque</h3>
+      <div class="small">A lista abaixo mostra somente os itens marcados com quantidade remanescente no estoque.</div>
+      <div class="table-wrap"><table id="tblShortagesLeft"><thead><tr><th>Código</th><th>Produto</th><th>Pedido</th><th>Permaneceu no estoque</th><th>Enviado</th></tr></thead><tbody></tbody></table></div>
+    </div>
+  </section>
+
+  <section id="admin" class="tab">
+    <div class="two">
+      <div class="card">
+        <h3 style="margin-top:0">Importar estoque</h3>
+        <input type="file" id="importFile" multiple accept=".pdf,.xlsx,.xls,.docx,.csv,.txt">
+        <div style="margin-top:10px"><button class="alt" onclick="importStock()">Importar arquivo</button></div>
+        <div id="importMsg" class="small" style="margin-top:10px"></div>
+        <div id="importSummary" class="notice" style="margin-top:10px">Nenhuma importação nesta sessão.</div>
+        <h4>Últimas importações</h4>
+        <div id="importsList" class="small"></div>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">Cadastro manual / edição rápida</h3>
+        <div class="row">
+          <div><label>Código</label><input id="pCode"></div>
+          <div><label>Produto</label><input id="pName"></div>
+        </div>
+        <div class="row">
+          <div><label>Material</label><input id="pMaterial"></div>
+          <div><label>Quantidade</label><input id="pStock" type="number" step="0.01"></div>
+          <div><label>Fator</label><input id="pFactor" type="number" step="1"></div>
+        </div>
+        <button onclick="saveManualProduct()">Salvar produto</button>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div id="loginModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);padding:20px">
+  <div class="card" style="max-width:420px;margin:50px auto">
+    <h3>Entrar</h3>
+    <input id="loginUser" placeholder="Usuário">
+    <input id="loginPass" type="password" placeholder="Senha" style="margin-top:10px">
+    <div class="row" style="margin-top:10px"><div><button onclick="doLogin()">Entrar</button></div><div><button class="light" onclick="closeLogin()">Fechar</button></div></div>
+  </div>
+</div>
+
+
+<div id="orderModal" class="modal-overlay">
+  <div class="modal-card">
+    <div class="modal-head">
+      <div>
+        <h3 style="margin:0">Detalhes da ordem</h3>
+        <div id="orderModalInfo" class="small">Nenhuma ordem aberta.</div>
+      </div>
+      <div class="row no-print" style="margin:0">
+        <div><button class="light" onclick="closeOrderModal()">Fechar</button></div>
+      </div>
+    </div>
+    <div class="table-wrap"><table id="tblOrderModal"><thead><tr><th>Código</th><th>Produto</th><th>Caixas</th><th>Unidades</th><th>Estoque</th><th>Status</th><th>Ação</th></tr></thead><tbody></tbody></table></div>
+  </div>
+</div>
+
+<div id="shortageModal" class="modal-overlay">
+  <div class="modal-card">
+    <div class="modal-head">
+      <div>
+        <h3 style="margin:0">Detalhes das faltas</h3>
+        <div id="shortageModalInfo" class="small">Nenhuma ordem aberta.</div>
+      </div>
+      <div class="row no-print" style="margin:0">
+        <div><button class="light" onclick="closeShortageModal()">Fechar</button></div>
+      </div>
+    </div>
+    <div class="table-wrap"><table id="tblShortagesModal"><thead><tr><th>Código</th><th>Produto</th><th>Pedido</th><th>Permaneceu no estoque</th><th>Enviado</th></tr></thead><tbody></tbody></table></div>
+  </div>
+</div>
+
+<script>
+if('serviceWorker' in navigator){ navigator.serviceWorker.register('./sw.js').catch(()=>{}); }
+const LS = { token:'pl_token', role:'pl_role', user:'pl_user', store:'pl_store' };
+const state = {
+  products:[], order:[], shortages:[], stores:{},
+  orderHistory:[], shortageHistory:[],
+  selectedStore: localStorage.getItem(LS.store) || '01',
+  selectedProduct:null,
+  selectedOrderNumber:'',
+  selectedShortageOrderNumber:'',
+  stockPage:1, stockPageSize:10,
+  orderPage:1, orderPageSize:10
+};
+function $(id){ return document.getElementById(id); }
+function token(){ return localStorage.getItem(LS.token) || ''; }
+function headers(json=true){ const h={}; if(json) h['Content-Type']='application/json'; if(token()) h['Authorization']='Bearer '+token(); return h; }
+function flash(msg, cls='notice'){ $('msg').innerHTML = `<div class="${cls}" style="margin-bottom:12px">${msg}</div>`; setTimeout(()=> $('msg').innerHTML='', 3500); }
+function showTab(id, btn){ document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active')); $(id).classList.add('active'); document.querySelectorAll('.tabs button').forEach(b=>b.classList.remove('active')); if(btn) btn.classList.add('active'); }
+function openLogin(){ $('loginModal').style.display='block'; }
+function closeLogin(){ $('loginModal').style.display='none'; }
+function openOrderModal(){ $('orderModal').style.display='block'; }
+function closeOrderModal(){ $('orderModal').style.display='none'; }
+function openShortageModal(){ $('shortageModal').style.display='block'; }
+function closeShortageModal(){ $('shortageModal').style.display='none'; }
+async function doLogin(){
+  const r = await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:$('loginUser').value,password:$('loginPass').value})});
+  const d = await r.json();
+  if(!r.ok){ flash(d.error || 'Falha no login', 'error'); return; }
+  localStorage.setItem(LS.token, d.token); localStorage.setItem(LS.role, d.role); localStorage.setItem(LS.user, d.username);
+  $('who').textContent = `${d.username} / ${d.role}`;
+  closeLogin(); flash('Login realizado com sucesso.', 'ok'); syncAll();
+}
+function logout(){ localStorage.removeItem(LS.token); localStorage.removeItem(LS.role); localStorage.removeItem(LS.user); $('who').textContent='offline'; flash('Sessão encerrada.'); }
+function updateStoreBadge(){ $('storeBadge').textContent = `${state.stores[state.selectedStore] || ('Loja '+state.selectedStore)}`; }
+async function syncAll(){
+  if(!token()){ flash('Faça login primeiro.', 'warnbox'); return; }
+  await Promise.all([loadStores(), loadProducts(), loadOrder(), loadShortages(), loadImports()]);
+  updateStoreBadge(); renderProducts(); renderOrderCatalog(); renderDraftOrder(); renderOrdersList(); renderOrder(); renderShortageOrders(); renderShortages();
+}
+async function syncProducts(){ await loadProducts(); renderProducts(); renderOrderCatalog(); renderDraftOrder(); renderOrder(); }
+async function loadStores(){
+  const r = await fetch('/api/stores',{headers:headers(false)}); const d = await r.json();
+  if(r.ok){
+    state.stores=d.stores||{};
+    const sel=$('storeSelect'); sel.innerHTML='';
+    Object.entries(state.stores).forEach(([id,name])=>{ const o=document.createElement('option'); o.value=id; o.textContent=`${id} - ${name}`; if(id===state.selectedStore) o.selected=true; sel.appendChild(o); });
+  }
+}
+async function loadProducts(){ const r=await fetch('/api/products',{headers:headers(false)}); const d=await r.json(); if(r.ok) state.products=d.products||[]; }
+async function loadOrder(){
+  const r=await fetch(`/api/orders/${state.selectedStore}`,{headers:headers(false)}); const d=await r.json();
+  if(r.ok){
+    state.order=(d.draft_items||[]).map(normalizeOrderItem);
+    state.orderHistory=d.history||[];
+    if(!state.selectedOrderNumber && state.orderHistory.length) state.selectedOrderNumber=state.orderHistory[0].order_number;
+  }
+}
+async function loadShortages(){
+  const r=await fetch(`/api/shortages/${state.selectedStore}`,{headers:headers(false)}); const d=await r.json();
+  if(r.ok){
+    state.shortageHistory=d.history||[];
+    if(state.selectedShortageOrderNumber){
+      const found = state.shortageHistory.find(x=>x.order_number===state.selectedShortageOrderNumber);
+      state.shortages = found ? (found.items||[]) : [];
+    } else if(state.shortageHistory.length){
+      state.selectedShortageOrderNumber = state.shortageHistory[0].order_number;
+      state.shortages = state.shortageHistory[0].items||[];
+    } else {
+      state.shortages = [];
+    }
+  }
+}
+
+function normalizeOrderItem(item){
+  const p = state.products.find(x=>x.code===item.code) || {};
+  const factor = Number(item.factor || p.factor || 1) || 1;
+  const stock = Number(item.stock !== undefined ? item.stock : (p.stock || 0));
+  const units = Number(item.units || 0);
+  const boxes = Number(item.boxes !== undefined ? item.boxes : (factor ? units / factor : 0));
+  return { ...item, factor, stock, units, boxes, insufficient: units > stock };
+}
+function setPageSize(type, value){
+  const size = Number(value||10);
+  if(type==='stock'){ state.stockPageSize=size; state.stockPage=1; renderProducts(); }
+  if(type==='order'){ state.orderPageSize=size; state.orderPage=1; renderOrderCatalog(); }
+}
+function pageJump(type, delta){
+  if(type==='stock'){ state.stockPage += delta; renderProducts(); }
+  if(type==='order'){ state.orderPage += delta; renderOrderCatalog(); }
+}
+function paginate(items, page, size){
+  const totalPages = Math.max(1, Math.ceil(items.length / size));
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  const start = (safePage - 1) * size;
+  return { totalPages, page:safePage, items:items.slice(start, start + size), totalItems:items.length };
+}
+function pager(targetId, type, page, totalPages, totalItems){
+  $(targetId).innerHTML = `
+    <div class="small">Página ${page} de ${totalPages} | ${totalItems} produto(s)</div>
+    <div class="controls">
+      <button class="light" onclick="pageJump('${type}', -10)">&lt;&lt;</button>
+      <button class="light" onclick="pageJump('${type}', -1)">&lt;</button>
+      <button class="light" onclick="pageJump('${type}', 1)">&gt;</button>
+      <button class="light" onclick="pageJump('${type}', 10)">&gt;&gt;</button>
+    </div>`;
+}
+function stockFiltered(){
+  const q = ($('searchStock').value || '').toLowerCase();
+  return state.products.filter(p => [p.code,p.product,p.material,p.source].join(' ').toLowerCase().includes(q));
+}
+function orderFiltered(){
+  const q = ($('searchOrder').value || '').toLowerCase();
+  return state.products.filter(p => [p.code,p.product,p.material].join(' ').toLowerCase().includes(q));
+}
+function renderProducts(){
+  const tbody = document.querySelector('#tblProducts tbody'); if(!tbody) return;
+  const data = paginate(stockFiltered(), state.stockPage, state.stockPageSize); state.stockPage = data.page;
+  tbody.innerHTML = data.items.map(p => `<tr><td>${p.code}</td><td>${p.product||''}</td><td>${p.material||''}</td><td>${fmt(p.stock)}</td><td>${fmt(p.factor)}</td><td>${p.source||''}</td><td><button class="light" onclick="selectProduct('${p.code}')">Editar</button></td></tr>`).join('') || '<tr><td colspan="7">Nenhum produto encontrado.</td></tr>';
+  pager('stockPager','stock',data.page,data.totalPages,data.totalItems);
+}
+function renderOrderCatalog(){
+  const tbody = document.querySelector('#tblOrderCatalog tbody'); if(!tbody) return;
+  const data = paginate(orderFiltered(), state.orderPage, state.orderPageSize); state.orderPage = data.page;
+  tbody.innerHTML = data.items.map(p => `<tr><td>${p.code}</td><td>${p.product||''}</td><td>${fmt(p.stock)}</td><td>${fmt(p.factor)}</td><td><button onclick="selectForOrder('${p.code}')">Selecionar</button></td></tr>`).join('') || '<tr><td colspan="5">Nenhum produto.</td></tr>';
+  pager('orderPager','order',data.page,data.totalPages,data.totalItems);
+}
+function selectProduct(code){
+  const p=state.products.find(x=>x.code===code); if(!p) return;
+  state.selectedProduct = p;
+  $('editCode').value = p.code;
+  $('editSource').value = p.source || '';
+  $('editName').value = p.product || '';
+  $('editMaterial').value = p.material || '';
+  $('editStock').value = p.stock || 0;
+  $('editFactor').value = p.factor || 1;
+  $('editMsg').className = 'notice ok';
+  $('editMsg').textContent = `Produto ${p.code} selecionado para edição.`;
+  renderFactorPrefixInfo(p.code);
+}
+function renderFactorPrefixInfo(code){
+  const prefix = String(code || '').slice(0,3);
+  if(!prefix){ $('factorPrefixInfo').textContent = 'Selecione um produto para ver quais códigos compartilharão o mesmo fator.'; return; }
+  const related = state.products.filter(p => String(p.code||'').startsWith(prefix)).map(p => p.code);
+  $('factorPrefixInfo').className = 'notice';
+  $('factorPrefixInfo').textContent = `Prefixo ${prefix}: o fator será igual para ${related.length} código(s): ${related.join(', ')}`;
+}
+async function saveStockEdit(){
+  if(!state.selectedProduct) return flash('Selecione um produto na lista de estoque.', 'warnbox');
+  const code = state.selectedProduct.code;
+  const body = {
+    product: $('editName').value,
+    material: $('editMaterial').value,
+    stock: $('editStock').value,
+    factor: $('editFactor').value,
+    apply_factor_prefix: true
+  };
+  const r = await fetch(`/api/products/${encodeURIComponent(code)}`, { method:'PUT', headers:headers(), body:JSON.stringify(body) });
+  const d = await r.json();
+  if(!r.ok) return flash(d.error || 'Falha ao salvar alteração.', 'error');
+  flash(d.message || 'Produto atualizado com sucesso.', 'ok');
+  await loadProducts();
+  await loadOrder();
+  const updated = state.products.find(x=>x.code===code);
+  if(updated) selectProduct(code);
+  renderProducts(); renderOrderCatalog(); renderDraftOrder(); renderOrdersList(); renderOrder();
+}
+function useInOrder(){
+  if(!state.selectedProduct) return flash('Selecione um produto na lista de estoque.', 'warnbox');
+  showTab('pedido', document.querySelector('[data-tab="pedido"]'));
+  selectForOrder(state.selectedProduct.code);
+}
+function selectForOrder(code){
+  const p=state.products.find(x=>x.code===code); if(!p) return;
+  state.selectedProduct = p;
+  $('orderCode').value=p.code;
+  $('orderProduct').value=p.product||'';
+  $('orderFactor').value=p.factor||1;
+  $('orderStock').value=fmt(p.stock);
+  const existing = state.order.find(x => x.code === code);
+  $('orderBoxes').value = existing ? existing.boxes : '';
+  $('orderUnits').value = existing ? existing.units : '';
+  if(existing){ updateOrderCalc(Number(existing.units||0), Number(p.factor||1), Number(existing.boxes||0)); }
+  else { calcFromBoxes(); }
+}
+function calcFromBoxes(){
+  const factor = Number($('orderFactor').value||1);
+  const boxes = Number($('orderBoxes').value||0);
+  const units = boxes * factor;
+  if(document.activeElement === $('orderBoxes')) $('orderUnits').value = units ? String(Math.round(units*100)/100) : '';
+  updateOrderCalc(Number($('orderUnits').value||0), factor, boxes);
+}
+function calcFromUnits(){
+  const factor = Number($('orderFactor').value||1);
+  const units = Number($('orderUnits').value||0);
+  $('orderBoxes').value = factor ? (units / factor).toFixed(2) : 0;
+  updateOrderCalc(units, factor, Number($('orderBoxes').value||0));
+}
+function updateOrderCalc(units, factor, boxes){
+  const stock = Number(String($('orderStock').value||0).replace(/\./g,'').replace(',','.')) || 0;
+  if(!$('orderCode').value){ $('orderCalc').className='notice'; $('orderCalc').textContent='Selecione um produto. O fator atualizado aparecerá automaticamente.'; return; }
+  if(units > stock){ $('orderCalc').className='notice error'; $('orderCalc').textContent=`Fator ${fmt(factor)} | Caixas ${fmt(boxes)} | Unidades ${fmt(units)} | Estoque insuficiente: faltam ${fmt(units-stock)}`; }
+  else { $('orderCalc').className='notice ok'; $('orderCalc').textContent=`Fator ${fmt(factor)} | Caixas ${fmt(boxes)} | Unidades ${fmt(units)}`; }
+}
+async function addOrderItem(){
+  const code=$('orderCode').value; if(!code) return flash('Selecione um produto.','warnbox');
+  const p = state.products.find(x=>x.code===code); if(!p) return;
+  const factor = Number($('orderFactor').value||1);
+  const boxes = Number($('orderBoxes').value||0);
+  const units = Number($('orderUnits').value||0);
+  const item = { code, product:p.product, factor, boxes, units, stock:Number(p.stock||0), insufficient: units > Number(p.stock||0) };
+  const idx = state.order.findIndex(x=>x.code===code); if(idx>=0) state.order[idx]=item; else state.order.push(item);
+  renderDraftOrder(); renderOrder(); renderShortages(); flash('Item adicionado na pré-visualização do pedido.','ok');
+}
+async function saveOrderDraft(){
+  if(!state.order.length) return flash('Adicione pelo menos um item antes de salvar o pedido.','warnbox');
+  const r = await fetch(`/api/orders/${state.selectedStore}/finalize`,{method:'POST',headers:headers(),body:JSON.stringify({items:state.order})});
+  const d = await r.json();
+  if(!r.ok) return flash(d.error || 'Falha ao salvar pedido.','error');
+  flash(`Pedido salvo com sucesso. Ordem ${d.order.order_number} gerada.`, 'ok');
+  state.selectedOrderNumber = d.order.order_number;
+  state.selectedShortageOrderNumber = d.order.order_number;
+  state.order = [];
+  await loadOrder();
+  await loadShortages();
+  clearOrderForm();
+  renderDraftOrder(); renderOrdersList(); renderOrder(); renderShortageOrders(); renderShortages();
+}
+async function saveOrder(){
+  const r = await fetch(`/api/orders/${state.selectedStore}`,{method:'PUT',headers:headers(),body:JSON.stringify({items:state.order})});
+  if(!r.ok) flash('Falha ao salvar a montagem atual.','error');
+}
+function clearOrderForm(){ ['orderCode','orderProduct','orderFactor','orderStock','orderBoxes','orderUnits'].forEach(id=>$(id).value=''); $('orderCalc').className='notice'; $('orderCalc').textContent='Selecione um produto. O fator atualizado aparecerá automaticamente.'; }
+function renderDraftOrder(){
+  const tbody = document.querySelector('#tblDraftOrder tbody'); if(!tbody) return;
+  const totalItems = state.order.length;
+  const totalUnits = state.order.reduce((s,x)=>s+Number(x.units||0),0);
+  const totalBoxes = state.order.reduce((s,x)=>s+Number(x.boxes||0),0);
+  const insufficient = state.order.filter(x=>x.insufficient).length;
+  $('draftSummary').innerHTML = `
+    <div class="summary-box"><div class="small">Itens</div><strong>${totalItems}</strong></div>
+    <div class="summary-box"><div class="small">Caixas</div><strong>${fmt(totalBoxes)}</strong></div>
+    <div class="summary-box"><div class="small">Unidades</div><strong>${fmt(totalUnits)}</strong></div>
+    <div class="summary-box"><div class="small">Com estoque inferior</div><strong>${insufficient}</strong></div>`;
+  tbody.innerHTML = state.order.map((p,i)=>`<tr><td>${p.code}</td><td>${p.product}</td><td>${fmt(p.boxes)}</td><td>${fmt(p.units)}</td><td>${fmt(p.stock)}</td><td>${p.insufficient ? '<span class="badge" style="background:#fff1f0;color:#8a1f11">Estoque inferior</span>' : '<span class="badge">OK</span>'}</td><td><button class="light" onclick="selectForOrder('${p.code}')">Editar</button> <button class="danger" onclick="removeOrderItem(${i})">Remover</button></td></tr>`).join('') || '<tr><td colspan="7">Nenhum item na montagem.</td></tr>';
+}
+function renderOrdersList(){
+  const tbody = document.querySelector('#tblOrdersList tbody'); if(!tbody) return;
+  $('selectedOrderInfo').textContent = state.selectedOrderNumber ? `Ordem selecionada: ${state.selectedOrderNumber}` : 'Nenhuma ordem selecionada.';
+  tbody.innerHTML = state.orderHistory.map(o=>`<tr><td><button class="light order-link" onclick="openOrder('${o.order_number}')"><span class="icon">🔎</span><span>${o.order_number}</span></button></td><td>${new Date(o.created_at).toLocaleString('pt-BR')}</td><td>${o.items.length}</td><td>${fmt((o.items||[]).reduce((s,x)=>s+Number(x.units||0),0))}</td><td><button class="light" onclick="openOrder('${o.order_number}')">Ver / editar</button> <button class="alt" onclick="editSavedOrder('${o.order_number}')">Editar pedido</button></td></tr>`).join('') || '<tr><td colspan="5">Nenhuma ordem salva.</td></tr>';
+}
+function getSelectedOrder(){ return state.orderHistory.find(o=>o.order_number===state.selectedOrderNumber) || null; }
+function renderOrder(){
+  const order = getSelectedOrder();
+  const rows = !order ? '<tr><td colspan="7">Selecione uma ordem na lista acima.</td></tr>' : (order.items||[]).map((p,i)=>`<tr><td>${p.code}</td><td>${p.product}</td><td><input type="number" step="0.01" value="${p.boxes}" onchange="editOrderBox(${i}, this.value)"></td><td><input type="number" step="0.01" value="${p.units}" onchange="editOrderUnits(${i}, this.value)"></td><td>${fmt(p.stock)}</td><td>${p.insufficient ? '<span class="badge" style="background:#fff1f0;color:#8a1f11">Estoque inferior</span>' : '<span class="badge">OK</span>'}</td><td><button class="danger" onclick="removeOrderItem(${i})">Remover</button></td></tr>`).join('');
+  const tbody = document.querySelector('#tblOrder tbody'); if(tbody) tbody.innerHTML = rows;
+  const modalTbody = document.querySelector('#tblOrderModal tbody'); if(modalTbody) modalTbody.innerHTML = rows;
+  $('selectedOrderInfo').textContent = state.selectedOrderNumber ? `Ordem selecionada: ${state.selectedOrderNumber}` : 'Nenhuma ordem selecionada.';
+  $('orderModalInfo').textContent = order ? `Ordem ${order.order_number} | ${new Date(order.created_at).toLocaleString('pt-BR')} | ${(order.items||[]).length} item(ns)` : 'Nenhuma ordem aberta.';
+}
+async function openOrder(orderNumber){ state.selectedOrderNumber=orderNumber; renderOrdersList(); renderOrder(); openOrderModal(); }
+async function editOrderBox(i,v){ const order=getSelectedOrder(); if(!order) return; const item=order.items[i]; item.boxes=Number(v||0); item.units=item.boxes*Number(item.factor||1); item.insufficient=item.units>Number(item.stock||0); await fetch(`/api/orders/${state.selectedStore}/${order.order_number}`,{method:'PUT',headers:headers(),body:JSON.stringify({items:order.items})}); await loadOrder(); renderOrdersList(); renderOrder(); renderShortageOrders(); }
+async function editOrderUnits(i,v){ const order=getSelectedOrder(); if(!order) return; const item=order.items[i]; item.units=Number(v||0); item.boxes=Number(item.factor||1)? item.units/Number(item.factor||1) : 0; item.insufficient=item.units>Number(item.stock||0); await fetch(`/api/orders/${state.selectedStore}/${order.order_number}`,{method:'PUT',headers:headers(),body:JSON.stringify({items:order.items})}); await loadOrder(); renderOrdersList(); renderOrder(); renderShortageOrders(); }
+async function removeOrderItem(i){
+  if(state.order.length){ state.order.splice(i,1); await saveOrder(); renderDraftOrder(); return; }
+  const order=getSelectedOrder(); if(!order) return;
+  order.items.splice(i,1);
+  await fetch(`/api/orders/${state.selectedStore}/${order.order_number}`,{method:'PUT',headers:headers(),body:JSON.stringify({items:order.items})});
+  await loadOrder(); await loadShortages(); renderDraftOrder(); renderOrdersList(); renderOrder(); renderShortageOrders(); renderShortages();
+}
+function editCurrentOrder(){ showTab('pedido', document.querySelector('[data-tab="pedido"]')); renderDraftOrder(); }
+async function editSavedOrder(orderNumber){
+  const order = state.orderHistory.find(o=>o.order_number===orderNumber); if(!order) return;
+  state.order = (order.items||[]).map(normalizeOrderItem);
+  showTab('pedido', document.querySelector('[data-tab="pedido"]'));
+  renderDraftOrder();
+  if(state.order[0]) selectForOrder(state.order[0].code);
+  flash(`Ordem ${orderNumber} carregada na montagem para edição.`, 'ok');
+}
+async function clearDraftOrder(){ state.order = []; await saveOrder(); clearOrderForm(); renderDraftOrder(); }
+function renderShortageOrders(){
+  const tbody = document.querySelector('#tblShortageOrders tbody'); if(!tbody) return;
+  $('selectedShortageInfo').textContent = state.selectedShortageOrderNumber ? `Ordem de faltas selecionada: ${state.selectedShortageOrderNumber}` : 'Nenhuma ordem selecionada para faltas.';
+  tbody.innerHTML = state.shortageHistory.map(o=>`<tr><td><button class="light order-link" onclick="openShortageOrder('${o.order_number}')"><span class="icon">🔎</span><span>${o.order_number}</span></button></td><td>${new Date(o.created_at).toLocaleString('pt-BR')}</td><td>${(o.items||[]).length}</td><td>${(o.items||[]).filter(x=>Number(x.left_in_stock||0)>0).length}</td><td><button class="light" onclick="openShortageOrder('${o.order_number}')">Ver / editar</button></td></tr>`).join('') || '<tr><td colspan="5">Nenhuma falta vinculada a pedidos salvos.</td></tr>';
+}
+function getSelectedShortageOrder(){ return state.shortageHistory.find(o=>o.order_number===state.selectedShortageOrderNumber) || null; }
+async function openShortageOrder(orderNumber){ state.selectedShortageOrderNumber=orderNumber; const item=getSelectedShortageOrder(); state.shortages=item ? (item.items||[]) : []; renderShortageOrders(); renderShortages(); openShortageModal(); }
+function renderShortages(){
+  const record = getSelectedShortageOrder();
+  const rows = !record ? '<tr><td colspan="5">Selecione uma ordem salva na lista acima.</td></tr>' : (record.items||[]).map((p)=>{ const left=(state.shortages.find(s=>s.code===p.code)||{}).left_in_stock || 0; const sent=Math.max(0, Number(p.requested_units||0)-Number(left||0)); const safeProduct=String(p.product||'').replace(/'/g,'&#39;'); return `<tr><td>${p.code}</td><td>${p.product}</td><td>${fmt(p.requested_units)}</td><td><input type="number" step="0.01" value="${left}" onchange="updateShortage('${p.code}', '${safeProduct}', ${p.requested_units}, this.value)"></td><td>${fmt(sent)}</td></tr>`; }).join('') || '<tr><td colspan="5">Sem itens para separar.</td></tr>';
+  const tbody = document.querySelector('#tblShortages tbody'); if(tbody) tbody.innerHTML = rows;
+  const modalTbody = document.querySelector('#tblShortagesModal tbody'); if(modalTbody) modalTbody.innerHTML = rows;
+  $('shortageModalInfo').textContent = record ? `Ordem ${record.order_number} | ${new Date(record.created_at).toLocaleString('pt-BR')} | ${(record.items||[]).length} item(ns)` : 'Nenhuma ordem aberta.';
+  renderShortagesLeft();
+}
+function renderShortagesLeft(){
+  const tbody = document.querySelector('#tblShortagesLeft tbody'); if(!tbody) return;
+  const items = state.shortages.filter(x => Number(x.left_in_stock||0) > 0);
+  tbody.innerHTML = items.map(x => `<tr><td>${x.code}</td><td>${x.product}</td><td>${fmt(x.requested_units)}</td><td>${fmt(x.left_in_stock)}</td><td>${fmt(x.sent_to_truck)}</td></tr>`).join('') || '<tr><td colspan="5">Nenhum item marcado como permaneceu no estoque.</td></tr>';
+}
+function updateShortage(code, product, requested_units, left){ const sent = Math.max(0, Number(requested_units)-Number(left||0)); const idx = state.shortages.findIndex(x=>x.code===code); const item = { code, product, requested_units:Number(requested_units), left_in_stock:Number(left||0), sent_to_truck:sent }; if(idx>=0) state.shortages[idx]=item; else state.shortages.push(item); renderShortagesLeft(); }
+async function saveShortages(){ if(!state.selectedShortageOrderNumber) return flash('Selecione uma ordem para editar as faltas.','warnbox'); await fetch(`/api/shortages/${state.selectedStore}/${state.selectedShortageOrderNumber}`,{method:'PUT',headers:headers(),body:JSON.stringify({items:state.shortages})}); await loadShortages(); renderShortageOrders(); renderShortages(); flash('Faltas salvas.','ok'); }
+async function applySeparation(){ if(!state.selectedShortageOrderNumber) return flash('Selecione uma ordem para aplicar a baixa.','warnbox'); await saveShortages(); const r = await fetch(`/api/separation/apply/${state.selectedStore}/${state.selectedShortageOrderNumber}`,{method:'POST',headers:headers(false)}); if(r.ok){ flash('Baixa de estoque aplicada com sucesso.','ok'); await loadProducts(); await loadOrder(); await loadShortages(); renderProducts(); renderOrderCatalog(); renderDraftOrder(); renderOrdersList(); renderOrder(); renderShortageOrders(); renderShortages(); } }
+async function changeStore(v){ state.selectedStore=v; localStorage.setItem(LS.store,v); state.selectedOrderNumber=''; state.selectedShortageOrderNumber=''; updateStoreBadge(); await loadOrder(); await loadShortages(); renderDraftOrder(); renderOrdersList(); renderOrder(); renderShortageOrders(); renderShortages(); }
+async function importStock(){
+  const files = Array.from($('importFile').files || []); if(!files.length) return flash('Escolha um ou mais arquivos para importar.','warnbox');
+  const fd = new FormData(); files.forEach(file => fd.append('files', file));
+  const r = await fetch('/api/stock/import-many',{method:'POST',headers: token()? {Authorization:'Bearer '+token()} : {}, body:fd});
+  const d = await r.json();
+  if(!r.ok) return flash(d.error || 'Falha na importação.','error');
+  $('importMsg').textContent = `Importados ${d.total_files} arquivo(s) | ${d.total_imported} produtos encontrados | Base atual: ${d.total_in_base}`;
+  const lines = [`Arquivos processados: ${d.total_files}`, `Produtos encontrados nos arquivos: ${d.total_imported}`, `Produtos novos adicionados à base: ${d.total_added_to_base}`, `Produtos mesclados sem duplicação: ${d.total_merged_existing}`, `Total atual na base: ${d.total_in_base}`, '', ...(d.imports||[]).map(x => `${x.file}: encontrados ${x.count} | novos ${x.added_to_base} | mesclados ${x.merged_existing}`)];
+  $('importSummary').textContent = lines.join('\n');
+  await loadProducts(); renderProducts(); renderOrderCatalog(); renderDraftOrder(); loadImports(); flash('Importação concluída.','ok');
+}
+async function loadImports(){ const r=await fetch('/api/stock/imports',{headers:headers(false)}); const d=await r.json(); if(r.ok){ $('importsList').innerHTML = (d.imports||[]).map(x=>`<div>${x.imported_at} - ${x.file} (${x.imported_type}) - ${x.count} itens</div>`).join('') || 'Sem importações.'; } }
+async function saveManualProduct(){
+  const body = { code:$('pCode').value, product:$('pName').value, material:$('pMaterial').value, stock:$('pStock').value, factor:$('pFactor').value };
+  const r = await fetch('/api/products',{method:'POST',headers:headers(),body:JSON.stringify(body)}); const d = await r.json(); if(!r.ok) return flash(d.error || 'Falha ao salvar produto.','error');
+  flash('Produto salvo.','ok'); await loadProducts(); renderProducts(); renderOrderCatalog(); renderDraftOrder();
+}
+function fmt(n){ return Number(n||0).toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:2}); }
+function downloadPdf(){ if(!state.selectedOrderNumber) return flash('Selecione uma ordem para baixar.','warnbox'); window.open(`/api/orders/${state.selectedStore}/pdf?orderNumber=${encodeURIComponent(state.selectedOrderNumber)}`, '_blank'); }
+function downloadWord(){ if(!state.selectedOrderNumber) return flash('Selecione uma ordem para baixar.','warnbox'); window.open(`/api/orders/${state.selectedStore}/word?orderNumber=${encodeURIComponent(state.selectedOrderNumber)}`, '_blank'); }
+function downloadExcel(){ if(!state.selectedOrderNumber) return flash('Selecione uma ordem para baixar.','warnbox'); window.open(`/api/orders/${state.selectedStore}/excel?orderNumber=${encodeURIComponent(state.selectedOrderNumber)}`, '_blank'); }
+function printOrder(){ showTab('ordem', document.querySelector('[data-tab="ordem"]')); setTimeout(()=>window.print(), 150); }
+window.addEventListener('click', (e)=>{ if(e.target===$('orderModal')) closeOrderModal(); if(e.target===$('shortageModal')) closeShortageModal(); if(e.target===$('loginModal')) closeLogin(); });
+document.addEventListener('keydown', (e)=>{ if(e.key==='Escape'){ closeLogin(); closeOrderModal(); closeShortageModal(); } });
+window.addEventListener('load', ()=>{ $('who').textContent = localStorage.getItem(LS.user) ? `${localStorage.getItem(LS.user)} / ${localStorage.getItem(LS.role)}` : 'offline'; state.selectedStore = localStorage.getItem(LS.store) || '01'; $('stockPageSize').value='10'; $('orderPageSize').value='10'; syncAll().catch(()=>{}); });
+</script>
+</body>
+</html>
